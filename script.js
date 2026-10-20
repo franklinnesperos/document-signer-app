@@ -1,5 +1,7 @@
-// Setup PDF.js Worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+// Setup PDF.js Worker mula sa reliable CDN
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+}
 
 let pdfDoc = null;
 let pageNum = 1;
@@ -9,38 +11,35 @@ let sigCanvas, sigCtx, isDrawing = false;
 let uploadedFile = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Canvas Initialization para sa Signature Pad
     sigCanvas = document.getElementById('sigCanvas');
     if (sigCanvas) {
         sigCtx = sigCanvas.getContext('2d');
 
-        // Mouse Events (Laptop / PC)
+        // Mouse Events
         sigCanvas.addEventListener('mousedown', startDrawing);
         sigCanvas.addEventListener('mousemove', draw);
         sigCanvas.addEventListener('mouseup', stopDrawing);
         sigCanvas.addEventListener('mouseleave', stopDrawing);
 
-        // Touch Events (Mobile Phone / Tablet)
+        // Touch Events para sa Mobile
         sigCanvas.addEventListener('touchstart', handleTouchStart, { passive: false });
         sigCanvas.addEventListener('touchmove', handleTouchMove, { passive: false });
         sigCanvas.addEventListener('touchend', stopDrawing);
     }
 
-    // File Upload Listener
     const fileInput = document.getElementById('fileUpload');
     if (fileInput) {
         fileInput.addEventListener('change', handleFileUpload);
     }
 });
 
-// Siguraduhing maayos ang laki at resolution ng Signature Canvas
+// Siguraduhing sakto ang canvas size
 function resizeSigCanvas() {
     if (!sigCanvas) return;
     const rect = sigCanvas.parentElement.getBoundingClientRect();
     sigCanvas.width = rect.width || 380;
     sigCanvas.height = rect.height || 170;
 
-    // Line Properties
     sigCtx.lineWidth = 2.5;
     sigCtx.strokeStyle = '#000000';
     sigCtx.lineCap = 'round';
@@ -78,12 +77,12 @@ function draw(e) {
 }
 
 function handleTouchStart(e) {
-    e.preventDefault(); // Iwasan ang pag-scroll ng background screen
+    e.preventDefault();
     startDrawing(e);
 }
 
 function handleTouchMove(e) {
-    e.preventDefault(); // Iwasan ang pag-scroll ng background screen habang pumipirma
+    e.preventDefault();
     draw(e);
 }
 
@@ -98,13 +97,11 @@ function clearSigCanvas() {
     }
 }
 
-// Bukas ng Signature Modal (Naka-lock ang Screen)
 function openSignatureModal() {
     const modal = document.getElementById('signatureModal');
     if (modal) {
         modal.classList.remove('hidden');
-        document.body.style.overflow = 'hidden'; // Pigilan ang pag-scroll ng buong page
-        
+        document.body.style.overflow = 'hidden';
         setTimeout(() => {
             resizeSigCanvas();
             clearSigCanvas();
@@ -112,16 +109,15 @@ function openSignatureModal() {
     }
 }
 
-// Sara ng Signature Modal
 function closeSignatureModal() {
     const modal = document.getElementById('signatureModal');
     if (modal) {
         modal.classList.add('hidden');
-        document.body.style.overflow = ''; // I-unlock ang pag-scroll ng page
+        document.body.style.overflow = '';
     }
 }
 
-// Handle Uploaded File (PDF, Word, Excel, Images)
+// STABLE FILE UPLOAD HANDLER
 function handleFileUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -134,57 +130,67 @@ function handleFileUpload(e) {
     document.getElementById('saveSection')?.classList.remove('hidden');
 
     const ext = file.name.split('.').pop().toLowerCase();
+    const renderContent = document.getElementById('documentRenderContent');
+    renderContent.innerHTML = '<div class="p-8 text-center text-gray-500">Binabasa ang file... Mangyaring maghintay.</div>';
+
     const reader = new FileReader();
 
     if (ext === 'pdf') {
         reader.readAsArrayBuffer(file);
-        reader.onload = function () {
-            pdfjsLib.getDocument({ data: reader.result }).promise.then(pdf => {
+        reader.onload = function (event) {
+            const typedarray = new Uint8Array(event.target.result);
+            pdfjsLib.getDocument(typedarray).promise.then(pdf => {
                 pdfDoc = pdf;
                 pageCount = pdf.numPages;
                 pageNum = 1;
                 document.getElementById('pageCount').innerText = pageCount;
                 renderPDFPage(pageNum);
+            }).catch(err => {
+                renderContent.innerHTML = `<div class="p-4 text-red-500">Error sa pagbasa ng PDF: ${err.message}</div>`;
             });
         };
     } else if (ext === 'docx') {
         reader.readAsArrayBuffer(file);
         reader.onload = function (loadEvent) {
             mammoth.convertToHtml({ arrayBuffer: loadEvent.target.result }).then(result => {
-                const renderContent = document.getElementById('documentRenderContent');
-                renderContent.innerHTML = `<div class="p-8 bg-white min-h-[800px] w-[600px] text-gray-800 text-sm">${result.value}</div>`;
+                renderContent.innerHTML = `<div class="p-8 bg-white min-h-[600px] w-full text-gray-800 text-sm overflow-auto">${result.value}</div>`;
                 document.getElementById('pageCount').innerText = '1';
                 document.getElementById('pageNum').innerText = '1';
-                document.getElementById('paperSizeVal').innerText = 'Word Doc Format';
+                document.getElementById('paperSizeVal').innerText = 'Word Doc';
+            }).catch(err => {
+                renderContent.innerHTML = `<div class="p-4 text-red-500">Error sa Word file: ${err.message}</div>`;
             });
         };
     } else if (['xlsx', 'xls'].includes(ext)) {
         reader.readAsArrayBuffer(file);
         reader.onload = function (loadEvent) {
-            const data = new Uint8Array(loadEvent.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const html = XLSX.utils.sheet_to_html(firstSheet);
-            
-            const renderContent = document.getElementById('documentRenderContent');
-            renderContent.innerHTML = `<div class="p-6 bg-white overflow-auto">${html}</div>`;
-            document.getElementById('pageCount').innerText = '1';
-            document.getElementById('pageNum').innerText = '1';
-            document.getElementById('paperSizeVal').innerText = 'Excel Sheet Format';
+            try {
+                const data = new Uint8Array(loadEvent.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const html = XLSX.utils.sheet_to_html(firstSheet);
+                
+                renderContent.innerHTML = `<div class="p-6 bg-white overflow-auto max-h-[600px]">${html}</div>`;
+                document.getElementById('pageCount').innerText = '1';
+                document.getElementById('pageNum').innerText = '1';
+                document.getElementById('paperSizeVal').innerText = 'Excel Sheet';
+            } catch (err) {
+                renderContent.innerHTML = `<div class="p-4 text-red-500">Error sa Excel file: ${err.message}</div>`;
+            }
         };
     } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
         reader.readAsDataURL(file);
         reader.onload = function (loadEvent) {
-            const renderContent = document.getElementById('documentRenderContent');
-            renderContent.innerHTML = `<img src="${loadEvent.target.result}" class="max-w-full h-auto" />`;
+            renderContent.innerHTML = `<div class="p-4 text-center"><img src="${loadEvent.target.result}" class="max-w-full h-auto mx-auto shadow" /></div>`;
             document.getElementById('pageCount').innerText = '1';
             document.getElementById('pageNum').innerText = '1';
-            document.getElementById('paperSizeVal').innerText = 'Image Format';
+            document.getElementById('paperSizeVal').innerText = 'Image File';
         };
+    } else {
+        renderContent.innerHTML = `<div class="p-4 text-red-500">Hindi suportadong uri ng file.</div>`;
     }
 }
 
-// Render Page ng PDF sa Canvas
 function renderPDFPage(num) {
     if (!pdfDoc) return;
     pdfDoc.getPage(num).then(page => {
@@ -196,6 +202,7 @@ function renderPDFPage(num) {
         const ctx = canvas.getContext('2d');
         canvas.height = viewport.height;
         canvas.width = viewport.width;
+        canvas.className = "mx-auto shadow";
 
         renderContent.appendChild(canvas);
 
@@ -207,7 +214,6 @@ function renderPDFPage(num) {
         page.render(renderContext);
         document.getElementById('pageNum').innerText = num;
 
-        // Kwentahin ang paper size (inches)
         const widthInInches = (viewport.width / 72 / scale).toFixed(1);
         const heightInInches = (viewport.height / 72 / scale).toFixed(1);
         document.getElementById('paperSizeVal').innerText = `${widthInInches}" x ${heightInInches}"`;
@@ -227,13 +233,13 @@ function nextPage() {
 }
 
 function zoomIn() {
-    scale += 0.1;
+    scale += 0.15;
     updateZoom();
 }
 
 function zoomOut() {
-    if (scale > 0.6) {
-        scale -= 0.1;
+    if (scale > 0.5) {
+        scale -= 0.15;
         updateZoom();
     }
 }
@@ -242,16 +248,9 @@ function updateZoom() {
     document.getElementById('zoomLevel').innerText = `${Math.round(scale * 100)}%`;
     if (pdfDoc) {
         renderPDFPage(pageNum);
-    } else {
-        const renderContent = document.getElementById('documentRenderContent');
-        if (renderContent) {
-            renderContent.style.transform = `scale(${scale})`;
-            renderContent.style.transformOrigin = 'top center';
-        }
     }
 }
 
-// Apply Signature, Name, Date bilang Draggable element
 function applySignature() {
     const nameInput = document.getElementById('signerName');
     const dateInput = document.getElementById('signerDate');
@@ -263,15 +262,15 @@ function applySignature() {
     if (!overlayLayer) return;
 
     const draggableElem = document.createElement('div');
-    draggableElem.className = 'absolute cursor-move border border-dashed border-blue-400 p-2 bg-white/80 rounded shadow-md flex flex-col items-center select-none z-10';
-    draggableElem.style.left = '50px';
-    draggableElem.style.top = '50px';
+    draggableElem.className = 'absolute cursor-move border border-dashed border-blue-500 p-2 bg-white/90 rounded shadow-lg flex flex-col items-center select-none z-20';
+    draggableElem.style.left = '40px';
+    draggableElem.style.top = '40px';
 
     draggableElem.innerHTML = `
-        <img src="${sigDataUrl}" alt="Signature" class="h-12 object-contain pointer-events-none" />
-        ${name ? `<div class="text-xs font-normal text-gray-800">${name}</div>` : ''}
+        <img src="${sigDataUrl}" alt="Signature" class="h-14 object-contain pointer-events-none" />
+        ${name ? `<div class="text-xs font-normal text-gray-800 mt-1">${name}</div>` : ''}
         ${date ? `<div class="text-[10px] font-normal text-gray-600">${date}</div>` : ''}
-        <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center">×</button>
+        <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center font-bold shadow">×</button>
     `;
 
     makeElementDraggable(draggableElem);
@@ -279,7 +278,6 @@ function applySignature() {
     closeSignatureModal();
 }
 
-// Magdagdag ng Custom Text
 function addCustomText() {
     const text = prompt("Ilagay ang text:");
     if (!text) return;
@@ -289,21 +287,20 @@ function addCustomText() {
     if (!overlayLayer) return;
 
     const draggableElem = document.createElement('div');
-    draggableElem.className = 'absolute cursor-move border border-dashed border-indigo-400 p-1 bg-white/80 rounded shadow-md select-none z-10';
-    draggableElem.style.left = '80px';
-    draggableElem.style.top = '80px';
+    draggableElem.className = 'absolute cursor-move border border-dashed border-indigo-500 p-2 bg-white/90 rounded shadow-lg select-none z-20';
+    draggableElem.style.left = '60px';
+    draggableElem.style.top = '60px';
     draggableElem.style.fontSize = `${pxSize || 14}px`;
 
     draggableElem.innerHTML = `
-        <span class="text-gray-800 font-normal">${text}</span>
-        <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center">×</button>
+        <span class="text-gray-900 font-normal">${text}</span>
+        <button onclick="this.parentElement.remove()" class="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center font-bold shadow">×</button>
     `;
 
     makeElementDraggable(draggableElem);
     overlayLayer.appendChild(draggableElem);
 }
 
-// Drag and Drop Logic
 function makeElementDraggable(elem) {
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
     
@@ -356,16 +353,15 @@ function makeElementDraggable(elem) {
     }
 }
 
-// Save / Export to PDF
 function saveAsPDF() {
     const element = document.getElementById('pageViewport');
     if (!element) return;
 
     const opt = {
-        margin: 0,
-        filename: `signed_${uploadedFile ? uploadedFile.name : 'document'}.pdf`,
+        margin: 5,
+        filename: `signed_${uploadedFile ? uploadedFile.name.replace(/\.[^/.]+$/, "") : 'document'}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2 },
+        html2canvas: { scale: 2, useCORS: true },
         jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' }
     };
 
