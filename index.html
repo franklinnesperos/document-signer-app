@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Signer App - Franklin Nesperos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Dependencies for PDF, Word, Excel, and Signature -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.16/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col justify-between font-sans">
+
+    <!-- Header / Navbar -->
+    <header class="bg-blue-600 text-white shadow-md p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold">Document Signer App</h1>
+        <div class="space-x-2">
+            <input type="file" id="fileUpload" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg">
+            <button onclick="document.getElementById('fileUpload').click()" class="bg-white text-blue-600 px-4 py-2 rounded font-semibold text-sm shadow hover:bg-gray-100 transition">
+                Upload File
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-grow container mx-auto p-4 flex flex-col items-center">
+        
+        <!-- Document Info Panel (Size & Pages) -->
+        <div id="docInfo" class="w-full max-w-4xl bg-white p-3 rounded shadow mb-4 flex justify-between items-center text-sm text-gray-700 hidden">
+            <div>
+                <span class="font-semibold">Paper Size:</span> <span id="paperSizeVal">-</span> | 
+                <span class="font-semibold ml-2">Total Pages:</span> <span id="totalPagesVal">1</span> |
+                <span class="font-semibold ml-2">Current Page:</span> <span id="currentPageVal">1</span>
+            </div>
+            <!-- Zoom Controls -->
+            <div class="space-x-1">
+                <button onclick="zoomOut()" class="bg-gray-200 px-2.5 py-1 rounded hover:bg-gray-300 font-bold">-</button>
+                <span id="zoomLevel" class="text-xs font-medium">100%</span>
+                <button onclick="zoomIn()" class="bg-gray-200 px-2.5 py-1 rounded hover:bg-gray-300 font-bold">+</button>
+            </div>
+        </div>
+
+        <!-- Action Toolbar for Adding Signatures & Text -->
+        <div id="actionToolbar" class="w-full max-w-4xl mb-3 flex gap-2 hidden">
+            <button onclick="openSignatureModal()" class="bg-emerald-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-emerald-700 transition">
+                + Add Signature, Name & Date
+            </button>
+            <button onclick="addCustomText()" class="bg-indigo-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-indigo-700 transition">
+                + Add Custom Text
+            </button>
+        </div>
+
+        <!-- Document Viewer Container -->
+        <div id="viewerContainer" class="w-full max-w-4xl bg-white border border-gray-300 rounded shadow-lg min-h-[500px] relative overflow-auto flex items-center justify-center p-6">
+            <div id="placeholderText" class="text-center text-gray-400">
+                <svg class="w-16 h-16 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                <p>Mag-upload ng PDF, MS Word, Excel, o Image para simulan.</p>
+            </div>
+            <div id="documentCanvasWrapper" class="relative shadow-md bg-white hidden">
+                <!-- Rendered content goes here -->
+                <div id="renderArea" class="p-4"></div>
+            </div>
+        </div>
+
+        <!-- Save Button -->
+        <div id="saveSection" class="w-full max-w-4xl mt-4 flex justify-end hidden">
+            <button onclick="saveAsPDF()" class="bg-green-600 text-white px-6 py-2.5 rounded font-bold shadow hover:bg-green-700 transition">
+                Save PDF / Download
+            </button>
+        </div>
+    </main>
+
+    <!-- Signature Modal -->
+    <div id="signatureModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">
+            <h3 class="text-lg font-bold mb-3 text-gray-800">Ilagay ang Pirma, Pangalan at Petsa</h3>
+            
+            <label class="block text-xs font-medium text-gray-600 mb-1">Gumuhit ng Pirma:</label>
+            <div class="border border-gray-300 rounded mb-3 bg-gray-50">
+                <canvas id="sigCanvas" width="380" height="150" class="cursor-crosshair w-full"></canvas>
+            </div>
+            <button onclick="clearSigCanvas()" class="text-xs text-red-600 mb-3 hover:underline">I-clear ang Pirma</button>
+
+            <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Pangalan (Optional):</label>
+                <input type="text" id="signerName" class="w-full border border-gray-300 rounded p-2 text-sm font-normal focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Franklin Nesperos">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Petsa (Optional):</label>
+                <input type="date" id="signerDate" class="w-full border border-gray-300 rounded p-2 text-sm font-normal focus:outline-none focus:ring-1 focus:ring-blue-500">
+            </div>
+
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeSignatureModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm">Kanselahin</button>
+                <button onclick="applySignature()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold">Ilagay sa Document</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer Credit -->
+    <footer class="bg-gray-900 text-gray-400 text-center py-4 text-xs border-t border-gray-800">
+        Developer : Franklin Nesperos
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
