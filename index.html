@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document Signer App - Franklin Nesperos</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="style.css">
-    <!-- Required Libraries for PDF, Word, Excel, Canvas, & PDF Export -->
+    <!-- PDF.js, Mammoth, SheetJS, html2canvas, jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.16/mammoth.browser.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -15,7 +14,7 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex flex-col justify-between font-sans">
 
-    <!-- Header / Navbar -->
+    <!-- Header -->
     <header class="bg-blue-600 text-white shadow-md p-4 flex justify-between items-center">
         <h1 class="text-xl font-bold">Document Signer App</h1>
         <div>
@@ -32,9 +31,9 @@
         <!-- Controls Header (Page Navigation & Zoom) -->
         <div id="docControls" class="w-full max-w-4xl bg-white p-3 rounded shadow mb-3 flex flex-wrap justify-between items-center text-sm hidden">
             <div class="flex items-center space-x-2">
-                <button onclick="prevPage()" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded font-medium">◀ Prev Page</button>
+                <button onclick="prevPage()" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">◀ Prev Page</button>
                 <span class="font-semibold text-gray-700">Page <span id="pageNum">1</span> of <span id="pageCount">1</span></span>
-                <button onclick="nextPage()" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded font-medium">Next Page ▶</button>
+                <button onclick="nextPage()" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Next Page ▶</button>
             </div>
             <div class="flex items-center space-x-2">
                 <span class="text-xs text-gray-500 font-medium" id="paperSizeVal">Letter Size</span>
@@ -45,7 +44,7 @@
             </div>
         </div>
 
-        <!-- Action Toolbar (Add Signature & Text) -->
+        <!-- Action Toolbar -->
         <div id="actionToolbar" class="w-full max-w-4xl mb-3 flex gap-2 hidden">
             <button onclick="openSignatureModal()" class="bg-emerald-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-emerald-700 transition">
                 + Add Signature, Name & Date
@@ -55,22 +54,22 @@
             </button>
         </div>
 
-        <!-- Document Viewer Container -->
+        <!-- Document Viewer (Interactive Visual Area) -->
         <div id="viewerContainer" class="w-full max-w-4xl bg-gray-200 border border-gray-300 rounded shadow-inner min-h-[600px] relative overflow-auto flex justify-center p-6">
             <div id="placeholderText" class="text-center text-gray-400 my-auto">
-                <svg class="w-16 h-16 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
-                <p class="text-sm">Mag-upload ng PDF, Word, Excel, o Image file para makita ang laman dito.</p>
+                <p class="text-lg">Mag-upload ng PDF, Word, Excel, o Image file para makita ang laman dito.</p>
             </div>
 
-            <!-- Visual Page Area with Overlay Support -->
+            <!-- Visual Page Area kung saan ilalagay ang overlays -->
             <div id="pageViewport" class="relative bg-white shadow-xl hidden overflow-hidden">
+                <!-- Dito ilalabas ang mismong nilalaman ng pahina -->
                 <div id="documentRenderContent" class="relative"></div>
-                <!-- Layer para sa mga draggable na pirma at teksto -->
+                <!-- Layer para sa mga ilalagay na pirma at teksto -->
                 <div id="overlayLayer" class="absolute inset-0 pointer-events-auto"></div>
             </div>
         </div>
 
-        <!-- Save Button Section -->
+        <!-- Download Button -->
         <div id="saveSection" class="w-full max-w-4xl mt-4 flex justify-end hidden">
             <button onclick="saveAsPDF()" class="bg-green-600 text-white px-6 py-2.5 rounded font-bold shadow hover:bg-green-700 transition">
                 Save PDF / Download
@@ -78,42 +77,39 @@
         </div>
     </main>
 
-    <!-- Signature Modal (Fixed and Non-scrollable background) -->
-    <div id="signatureModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center hidden z-50 p-4 overscroll-none">
-        <div class="bg-white p-6 rounded-2xl w-full max-w-md shadow-2xl relative flex flex-col max-h-[90vh]">
+    <!-- Signature Modal -->
+    <div id="signatureModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-lg w-full max-w-md shadow-xl">
             <h3 class="text-lg font-bold mb-3 text-gray-800">Ilagay ang Pirma, Pangalan at Petsa</h3>
             
-            <label class="block text-xs font-semibold text-gray-600 mb-1">Gumuhit ng Pirma dito:</label>
-            <div class="border-2 border-gray-300 rounded-xl mb-2 bg-gray-50 relative overflow-hidden flex justify-center items-center">
-                <canvas id="sigCanvas" class="w-full h-44 cursor-crosshair block" style="touch-action: none;"></canvas>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Gumuhit ng Pirma:</label>
+            <div class="border border-gray-300 rounded mb-2 bg-gray-50">
+                <canvas id="sigCanvas" width="380" height="140" class="cursor-crosshair w-full"></canvas>
             </div>
-            <button type="button" onclick="clearSigCanvas()" class="text-xs text-red-600 font-medium mb-3 hover:underline text-left self-start">
-                🗑️ I-clear ang Pirma
-            </button>
+            <button onclick="clearSigCanvas()" class="text-xs text-red-600 mb-3 hover:underline">I-clear ang Pirma</button>
 
-            <div class="space-y-3 mb-4 overflow-y-auto">
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Pangalan (Optional):</label>
-                    <input type="text" id="signerName" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-normal" placeholder="Franklin Nesperos">
-                </div>
-
-                <div>
-                    <label class="block text-xs font-semibold text-gray-600 mb-1">Petsa (Optional):</label>
-                    <input type="date" id="signerDate" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-normal">
-                </div>
+            <div class="mb-3">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Pangalan (Optional):</label>
+                <input type="text" id="signerName" class="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="Franklin Nesperos">
             </div>
 
-            <div class="flex justify-end space-x-2 pt-2 border-t border-gray-100">
-                <button type="button" onclick="closeSignatureModal()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300">Kanselahin</button>
-                <button type="button" onclick="applySignature()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700">I-place sa Document</button>
+            <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-600 mb-1">Petsa (Optional):</label>
+                <input type="date" id="signerDate" class="w-full border border-gray-300 rounded p-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+            </div>
+
+            <div class="flex justify-end space-x-2">
+                <button onclick="closeSignatureModal()" class="bg-gray-300 text-gray-700 px-4 py-2 rounded text-sm">Kanselahin</button>
+                <button onclick="applySignature()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm font-semibold">I-place sa Document</button>
             </div>
         </div>
     </div>
 
-    <!-- Mandatory Footer Credit -->
+    <!-- Footer -->
     <footer class="bg-gray-900 text-gray-400 text-center py-4 text-xs border-t border-gray-800">
         Developer : Franklin Nesperos
     </footer>
 
+    <script src="script.js"></script>
 </body>
 </html>
