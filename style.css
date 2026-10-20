@@ -1,1 +1,35 @@
+/* Custom Styles para sa Document Signer App - Franklin Nesperos */
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Scrollbar customization para sa Document Viewer */
+#viewerContainer::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+#viewerContainer::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+#viewerContainer::-webkit-scrollbar-thumb {
+    background: #c5c5c5;
+    border-radius: 4px;
+}
+
+#viewerContainer::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Siguraduhing hindi bold ang mga default text sa signature at inputs */
+input, textarea, select {
+    font-weight: 400 !important;
+}
+
+/* Smooth transition para sa zoom effects */
+#renderArea {
+    transition: transform 0.2s ease-in-out;
+}
 
